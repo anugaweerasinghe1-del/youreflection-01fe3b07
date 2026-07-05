@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WallRouteImport } from './routes/wall'
+import { Route as ResultsRouteImport } from './routes/results'
 import { Route as ReflectRouteImport } from './routes/reflect'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LetterSessionIdRouteImport } from './routes/letter.$sessionId'
@@ -17,6 +18,11 @@ import { Route as LetterSessionIdRouteImport } from './routes/letter.$sessionId'
 const WallRoute = WallRouteImport.update({
   id: '/wall',
   path: '/wall',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResultsRoute = ResultsRouteImport.update({
+  id: '/results',
+  path: '/results',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReflectRoute = ReflectRouteImport.update({
@@ -38,12 +44,14 @@ const LetterSessionIdRoute = LetterSessionIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/reflect': typeof ReflectRoute
+  '/results': typeof ResultsRoute
   '/wall': typeof WallRoute
   '/letter/$sessionId': typeof LetterSessionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/reflect': typeof ReflectRoute
+  '/results': typeof ResultsRoute
   '/wall': typeof WallRoute
   '/letter/$sessionId': typeof LetterSessionIdRoute
 }
@@ -51,20 +59,28 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/reflect': typeof ReflectRoute
+  '/results': typeof ResultsRoute
   '/wall': typeof WallRoute
   '/letter/$sessionId': typeof LetterSessionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/reflect' | '/wall' | '/letter/$sessionId'
+  fullPaths: '/' | '/reflect' | '/results' | '/wall' | '/letter/$sessionId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/reflect' | '/wall' | '/letter/$sessionId'
-  id: '__root__' | '/' | '/reflect' | '/wall' | '/letter/$sessionId'
+  to: '/' | '/reflect' | '/results' | '/wall' | '/letter/$sessionId'
+  id:
+    | '__root__'
+    | '/'
+    | '/reflect'
+    | '/results'
+    | '/wall'
+    | '/letter/$sessionId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ReflectRoute: typeof ReflectRoute
+  ResultsRoute: typeof ResultsRoute
   WallRoute: typeof WallRoute
   LetterSessionIdRoute: typeof LetterSessionIdRoute
 }
@@ -76,6 +92,13 @@ declare module '@tanstack/react-router' {
       path: '/wall'
       fullPath: '/wall'
       preLoaderRoute: typeof WallRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/results': {
+      id: '/results'
+      path: '/results'
+      fullPath: '/results'
+      preLoaderRoute: typeof ResultsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reflect': {
@@ -105,6 +128,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ReflectRoute: ReflectRoute,
+  ResultsRoute: ResultsRoute,
   WallRoute: WallRoute,
   LetterSessionIdRoute: LetterSessionIdRoute,
 }

@@ -1,85 +1,80 @@
+export type AgeGroup = "13-17" | "18-24" | "25-34" | "35-44" | "45+";
+
+export const AGE_OPTIONS: readonly (AgeGroup | "Under 13")[] = [
+  "Under 13",
+  "13-17",
+  "18-24",
+  "25-34",
+  "35-44",
+  "45+",
+] as const;
+
 export type Question =
   | { id: string; category: string; type: "text"; prompt: string; placeholder?: string }
-  | {
-      id: string;
-      category: string;
-      type: "choice";
-      prompt: string;
-      options: string[];
-    }
-  | {
-      id: string;
-      category: string;
-      type: "scale";
-      prompt: string;
-      min: number;
-      max: number;
-      minLabel?: string;
-      maxLabel?: string;
-    };
+  | { id: string; category: string; type: "choice"; prompt: string; options: string[] }
+  | { id: string; category: string; type: "scale"; prompt: string; min: number; max: number; minLabel?: string; maxLabel?: string };
 
-// 15 prompts. Softer, more curious tone — less therapy, more conversation.
-// IDs, categories, types, and any option string referenced by detectSignals()
-// (`A loud one`, `Approval`, `Heartbroken`, `Concerned`, `Distant`,
-// `One-sided`, `Missing`, `Uncertain`) are kept verbatim.
+// 14 questions after the age gate. Total on-screen prompts: 15.
+// IDs referenced by detectSignals() must stay verbatim:
+//   appearance_photo ("A loud one"), appearance_mirror, confidence_room ("Approval"),
+//   confidence_scale, comparison_scale, relationships_recent ("Distant","One-sided"),
+//   worth_belief, compassion_friend ("Heartbroken","Concerned").
 export const QUESTIONS: Question[] = [
-  { id: "identity_notice", category: "Identity", type: "text",
-    prompt: "What's something about you that people usually miss at first?",
-    placeholder: "A quality, a habit, a small truth." },
-
-  { id: "appearance_photo", category: "Appearance", type: "choice",
+  // ---------- Self reflection (8) ----------
+  { id: "appearance_photo", category: "Reflection", type: "choice",
     prompt: "You catch yourself in a candid photo. Your first thought is…",
     options: ["Kind of like it", "Nothing much", "A small critique", "A loud one"] },
 
-  { id: "appearance_mirror", category: "Appearance", type: "scale",
+  { id: "appearance_mirror", category: "Reflection", type: "scale",
     prompt: "When you look in the mirror, how kind is your inner voice?",
     min: 1, max: 10, minLabel: "Rarely kind", maxLabel: "Almost always kind" },
 
-  { id: "confidence_room", category: "Confidence", type: "choice",
+  { id: "confidence_room", category: "Reflection", type: "choice",
     prompt: "You walk into a room full of strangers. You're mostly looking for…",
     options: ["Someone to connect with", "A quiet spot", "Approval", "The exit"] },
 
-  { id: "confidence_scale", category: "Confidence", type: "scale",
+  { id: "confidence_scale", category: "Reflection", type: "scale",
     prompt: "How often do you trust your own call without checking with someone else?",
     min: 1, max: 10, minLabel: "Rarely", maxLabel: "Almost always" },
 
-  { id: "comparison_scroll", category: "Comparison", type: "choice",
-    prompt: "After a long scroll through other people's lives, you usually feel…",
-    options: ["Inspired", "Pretty unaffected", "A little behind", "Not enough"] },
-
-  { id: "comparison_scale", category: "Comparison", type: "scale",
+  { id: "comparison_scale", category: "Reflection", type: "scale",
     prompt: "How much do you measure yourself against other people?",
     min: 1, max: 10, minLabel: "Barely", maxLabel: "A lot" },
 
-  { id: "relationships_recent", category: "Relationships", type: "choice",
+  { id: "relationships_recent", category: "Reflection", type: "choice",
     prompt: "Your close relationships lately feel mostly…",
     options: ["Nourishing", "Steady", "One-sided", "Distant"] },
 
-  { id: "relationships_seen", category: "Relationships", type: "text",
-    prompt: "Who makes you feel most yourself — and what do they seem to see?",
-    placeholder: "No names needed." },
-
-  { id: "worth_belief", category: "Self-worth", type: "scale",
+  { id: "worth_belief", category: "Reflection", type: "scale",
     prompt: "How much do you feel you're already enough, before achieving anything more?",
     min: 1, max: 10, minLabel: "Not really", maxLabel: "Deeply" },
 
-  { id: "worth_inner_sentence", category: "Self-worth", type: "text",
-    prompt: "Is there a sentence you tell yourself a lot that might not actually be true?",
-    placeholder: "Write it however it shows up." },
-
-  { id: "purpose_meaning", category: "Purpose", type: "choice",
-    prompt: "Right now, meaning in your life feels…",
-    options: ["Clear", "Slowly forming", "Uncertain", "Missing"] },
-
-  { id: "growth_becoming", category: "Growth", type: "text",
-    prompt: "Who are you quietly working on becoming?",
-    placeholder: "A version of you — not a performance." },
-
-  { id: "compassion_friend", category: "Self-Compassion", type: "choice",
+  { id: "compassion_friend", category: "Reflection", type: "choice",
     prompt: "If a close friend talked to themselves the way you talk to yourself, you'd feel…",
     options: ["Proud of them", "Protective", "Concerned", "Heartbroken"] },
 
-  { id: "compassion_permission", category: "Self-Compassion", type: "text",
-    prompt: "What's one feeling you rarely let yourself have?",
-    placeholder: "Keep it short if you want." },
+  // ---------- Society / beauty standards (6) ----------
+  { id: "appearance_importance", category: "Society", type: "scale",
+    prompt: "How important do you think appearance is in today's society?",
+    min: 1, max: 5, minLabel: "Not important", maxLabel: "Extremely" },
+
+  { id: "confidence_influence", category: "Society", type: "choice",
+    prompt: "Which do you think influences people's confidence the most?",
+    options: ["Family and upbringing", "Friends and peers", "Social media", "Personal achievements"] },
+
+  { id: "platform_impact", category: "Society", type: "choice",
+    prompt: "Which platform do you think affects body image the most?",
+    options: ["Instagram", "TikTok", "Snapchat", "YouTube"] },
+
+  { id: "celebrity_influence", category: "Society", type: "scale",
+    prompt: "How much do celebrities and influencers shape beauty standards?",
+    min: 1, max: 5, minLabel: "Barely", maxLabel: "Enormously" },
+
+  { id: "edited_photos_labeled", category: "Society", type: "choice",
+    prompt: "Should edited photos be labelled on social media?",
+    options: ["Yes, always", "Only for ads", "No", "Not sure"] },
+
+  { id: "pressure_source", category: "Society", type: "choice",
+    prompt: "What do you think is the biggest source of pressure to look a certain way?",
+    options: ["Social media", "Advertising", "Friends and family", "Yourself"] },
 ];

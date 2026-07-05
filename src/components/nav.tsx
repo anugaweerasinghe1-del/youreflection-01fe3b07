@@ -10,9 +10,12 @@ export function Nav() {
         >
           Beyond
         </Link>
-        <nav className="flex items-center gap-8 text-[10px] uppercase tracking-[0.35em] text-foreground/60">
+        <nav className="flex items-center gap-6 text-[10px] uppercase tracking-[0.35em] text-foreground/60 md:gap-8">
           <Link to="/reflect" className="transition hover:text-foreground [&.active]:text-foreground">
             Reflect
+          </Link>
+          <Link to="/results" className="transition hover:text-foreground [&.active]:text-foreground">
+            Results
           </Link>
           <Link to="/wall" className="transition hover:text-foreground [&.active]:text-foreground">
             Wall

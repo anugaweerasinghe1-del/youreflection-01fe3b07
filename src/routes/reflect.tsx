@@ -1,8 +1,9 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { QUESTIONS, type Question } from "@/lib/questions";
+import { QUESTIONS, type Question, type AgeGroup } from "@/lib/questions";
 import { generateLetter } from "@/lib/reflection.functions";
+import { hasReachedLimit, recordSubmit, getSubmitCount, MAX_SUBMITS } from "@/lib/submit-limit";
 import sectionWindow from "@/assets/section-window.jpg";
 
 export const Route = createFileRoute("/reflect")({
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/reflect")({
       {
         name: "description",
         content:
-          "A quiet series of prompts. Answer them at your own pace. Nothing is shared, nothing is saved beyond your reflection.",
+          "An anonymous class survey on self-image and beauty standards. Two minutes, no name, no email.",
       },
       { name: "robots", content: "noindex" },
     ],
@@ -23,23 +24,35 @@ export const Route = createFileRoute("/reflect")({
 type AnswerValue = string | number;
 type Answers = Record<string, AnswerValue>;
 
-const STORAGE_KEY = "bwys.answers.v1";
+const STORAGE_KEY = "bwys.answers.v2";
+const AGE_KEY = "bwys.age.v1";
+
+type Stage = "intro" | "under13" | "survey" | "limit";
 
 function ReflectPage() {
   const navigate = useNavigate();
   const generate = useServerFn(generateLetter);
+
+  const [stage, setStage] = useState<Stage>("intro");
+  const [ageGroup, setAgeGroup] = useState<AgeGroup | null>(null);
 
   const [i, setI] = useState(0);
   const [answers, setAnswers] = useState<Answers>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Hydrate from sessionStorage
+  // Bootstrap: check submit limit + hydrate.
   useEffect(() => {
+    if (hasReachedLimit()) {
+      setStage("limit");
+      return;
+    }
     try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as { i?: number; answers?: Answers };
+      const rawAge = sessionStorage.getItem(AGE_KEY);
+      const rawAns = sessionStorage.getItem(STORAGE_KEY);
+      if (rawAge) setAgeGroup(rawAge as AgeGroup);
+      if (rawAns) {
+        const parsed = JSON.parse(rawAns) as { i?: number; answers?: Answers };
         if (parsed.answers) setAnswers(parsed.answers);
         if (typeof parsed.i === "number") setI(Math.min(parsed.i, QUESTIONS.length - 1));
       }
@@ -47,44 +60,47 @@ function ReflectPage() {
   }, []);
 
   useEffect(() => {
+    if (stage !== "survey") return;
     try {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ i, answers }));
     } catch {}
-  }, [i, answers]);
+  }, [i, answers, stage]);
 
   const q = QUESTIONS[i];
   const total = QUESTIONS.length;
-  const value = answers[q.id];
+  const value = q ? answers[q.id] : undefined;
 
-  const canAdvance =
-    q.type === "text"
+  const canAdvance = !q
+    ? false
+    : q.type === "text"
       ? typeof value === "string" && value.trim().length >= 2
       : q.type === "choice"
         ? typeof value === "string" && value.trim().length >= 1
         : typeof value === "number";
 
   const setValue = useCallback(
-    (v: AnswerValue) => setAnswers((a) => ({ ...a, [q.id]: v })),
-    [q.id],
+    (v: AnswerValue) => q && setAnswers((a) => ({ ...a, [q.id]: v })),
+    [q],
   );
 
   const submit = useCallback(async () => {
+    if (!ageGroup) return;
     setSubmitting(true);
     setError(null);
     try {
-      const res = await generate({ data: { answers } });
+      const res = await generate({ data: { answers, ageGroup } });
+      recordSubmit();
+      sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(AGE_KEY);
       if (res.sessionId) {
-        sessionStorage.removeItem(STORAGE_KEY);
         navigate({ to: "/letter/$sessionId", params: { sessionId: res.sessionId } });
         return;
       }
-      // Persistence failed but we still have the letter — stash it and open inline preview.
       try {
         sessionStorage.setItem(
           "bwys.letter.inline.v1",
           JSON.stringify({ letter: res.letter, insights: res.insights }),
         );
-        sessionStorage.removeItem(STORAGE_KEY);
         navigate({ to: "/letter/$sessionId", params: { sessionId: "preview" } });
       } catch {
         setError("Your letter was written but couldn't be saved. Please try again.");
@@ -97,7 +113,7 @@ function ReflectPage() {
       );
       setSubmitting(false);
     }
-  }, [answers, generate, navigate]);
+  }, [ageGroup, answers, generate, navigate]);
 
   const next = useCallback(async () => {
     if (submitting) return;
@@ -112,12 +128,18 @@ function ReflectPage() {
 
   const back = useCallback(() => {
     if (i > 0) setI((n) => n - 1);
+    else setStage("intro");
   }, [i]);
 
+  const startSurvey = useCallback((age: AgeGroup) => {
+    try { sessionStorage.setItem(AGE_KEY, age); } catch {}
+    setAgeGroup(age);
+    setStage("survey");
+  }, []);
 
   return (
     <div className="grain relative flex min-h-screen flex-col overflow-hidden bg-background text-foreground">
-      {/* Warm, subtle ambient layer — kept far behind text, low opacity, blurred. */}
+      {/* Ambient background */}
       <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
         <img
           src={sectionWindow}
@@ -128,43 +150,50 @@ function ReflectPage() {
         <div className="absolute inset-0 bg-gradient-to-b from-background/85 via-background/70 to-background" />
       </div>
 
-      <TopBar current={i} total={total} onExit={() => navigate({ to: "/" })} />
+      {stage === "survey" && (
+        <TopBar current={i} total={total} onExit={() => navigate({ to: "/" })} />
+      )}
 
-      <main className="relative flex flex-1 items-center justify-center px-6 py-32 md:px-10">
-        {submitting ? (
+      <main className="relative flex flex-1 items-center justify-center px-6 py-24 md:px-10 md:py-32">
+        {stage === "intro" ? (
+          <IntroGate onPick={startSurvey} onUnder13={() => setStage("under13")} />
+        ) : stage === "under13" ? (
+          <Under13Screen />
+        ) : stage === "limit" ? (
+          <LimitScreen />
+        ) : submitting ? (
           <Composing />
-        ) : (
+        ) : q ? (
           <div key={q.id} className="animate-fade-up w-full max-w-3xl">
-              <p className="text-[10px] uppercase tracking-[0.4em] text-accent/70">
-                {q.category}
-              </p>
-              <h1 className="font-display mt-8 text-balance text-[clamp(1.75rem,4.5vw,3.75rem)] leading-[1.1]">
-                {q.prompt}
-              </h1>
+            <p className="text-[10px] uppercase tracking-[0.4em] text-accent/70">
+              {q.category}
+            </p>
+            <h1 className="font-display mt-8 text-balance text-[clamp(1.75rem,4.5vw,3.75rem)] leading-[1.1]">
+              {q.prompt}
+            </h1>
 
-              <div className="mt-16">
-                <Input q={q} value={value} onChange={setValue} onEnter={next} />
+            <div className="mt-16">
+              <Input q={q} value={value} onChange={setValue} onEnter={next} />
+            </div>
+
+            {error && (
+              <div className="mt-8 space-y-4">
+                <p className="text-sm text-destructive">{error}</p>
+                {i === total - 1 && (
+                  <button
+                    onClick={submit}
+                    className="inline-flex items-center gap-3 border-b border-foreground/40 pb-1 text-xs uppercase tracking-[0.3em] text-foreground transition hover:border-accent hover:text-accent"
+                  >
+                    Try again <span>→</span>
+                  </button>
+                )}
               </div>
-
-              {error && (
-                <div className="mt-8 space-y-4">
-                  <p className="text-sm text-destructive">{error}</p>
-                  {i === total - 1 && (
-                    <button
-                      onClick={submit}
-                      className="inline-flex items-center gap-3 border-b border-foreground/40 pb-1 text-xs uppercase tracking-[0.3em] text-foreground transition hover:border-accent hover:text-accent"
-                    >
-                      Try again <span>→</span>
-                    </button>
-                  )}
-                </div>
-              )}
-
+            )}
           </div>
-        )}
+        ) : null}
       </main>
 
-      {!submitting && (
+      {stage === "survey" && !submitting && (
         <BottomBar
           onBack={back}
           onNext={next}
@@ -173,6 +202,102 @@ function ReflectPage() {
           isLast={i === total - 1}
         />
       )}
+    </div>
+  );
+}
+
+/* ---------- Intro / age gate ---------- */
+
+function IntroGate({
+  onPick,
+  onUnder13,
+}: {
+  onPick: (age: AgeGroup) => void;
+  onUnder13: () => void;
+}) {
+  const groups: (AgeGroup | "Under 13")[] = ["Under 13", "13-17", "18-24", "25-34", "35-44", "45+"];
+  return (
+    <div className="animate-fade-up w-full max-w-3xl">
+      <p className="text-[10px] uppercase tracking-[0.4em] text-accent/70">
+        Anonymous class survey · About 2 minutes
+      </p>
+      <h1 className="font-display mt-6 text-balance text-[clamp(2rem,5vw,4rem)] leading-[1.05]">
+        Before we begin — which age group are you in?
+      </h1>
+      <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground">
+        This is an anonymous survey on self-image and beauty standards for a
+        class research project. We don't collect your name, email, or any
+        identifying information — only your answers.
+      </p>
+
+      <div className="mt-12 flex flex-col gap-3">
+        {groups.map((g) => (
+          <button
+            key={g}
+            onClick={() => (g === "Under 13" ? onUnder13() : onPick(g as AgeGroup))}
+            className="group flex items-center justify-between border-b border-border px-1 py-5 text-left transition hover:border-accent"
+          >
+            <span className="font-display text-2xl text-foreground/80 transition group-hover:text-foreground md:text-3xl">
+              {g}
+            </span>
+            <span className="text-xs uppercase tracking-[0.3em] text-muted-foreground transition group-hover:text-accent">
+              Continue →
+            </span>
+          </button>
+        ))}
+      </div>
+      <p className="mt-8 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+        Two of your answers, at most, will be saved to the anonymous dataset.
+      </p>
+    </div>
+  );
+}
+
+function Under13Screen() {
+  return (
+    <div className="animate-fade-up w-full max-w-xl text-center">
+      <p className="text-[10px] uppercase tracking-[0.4em] text-accent/70">Thanks for visiting</p>
+      <h1 className="font-display mt-6 text-balance text-[clamp(1.75rem,4vw,3rem)] leading-tight">
+        This survey is for ages 13 and up.
+      </h1>
+      <p className="mt-6 text-base leading-relaxed text-muted-foreground">
+        Please come back when you're a little older. Take care of yourself in the meantime.
+      </p>
+      <Link
+        to="/"
+        className="mt-10 inline-flex border-b border-foreground/40 pb-1 text-xs uppercase tracking-[0.3em] hover:border-accent hover:text-accent"
+      >
+        Back home
+      </Link>
+    </div>
+  );
+}
+
+function LimitScreen() {
+  const count = typeof window !== "undefined" ? getSubmitCount() : MAX_SUBMITS;
+  return (
+    <div className="animate-fade-up w-full max-w-xl text-center">
+      <p className="text-[10px] uppercase tracking-[0.4em] text-accent/70">Thank you</p>
+      <h1 className="font-display mt-6 text-balance text-[clamp(1.75rem,4vw,3rem)] leading-tight">
+        You've already shared your reflection {count === MAX_SUBMITS ? "twice" : `${count} times`}.
+      </h1>
+      <p className="mt-6 text-base leading-relaxed text-muted-foreground">
+        Thank you for contributing to the survey. Every voice matters.
+      </p>
+      <div className="mt-10 flex flex-col items-center gap-4">
+        <Link
+          to="/results"
+          className="inline-flex border-b border-foreground/40 pb-1 text-xs uppercase tracking-[0.3em] hover:border-accent hover:text-accent"
+        >
+          See what everyone's sharing →
+        </Link>
+        <Link
+          to="/"
+          className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground hover:text-foreground"
+        >
+          Back home
+        </Link>
+      </div>
     </div>
   );
 }
@@ -251,39 +376,14 @@ function ChoiceInput({
   value: string | undefined;
   onChange: (v: string) => void;
 }) {
-  const isCustom =
-    typeof value === "string" && value.length > 0 && !options.includes(value);
-  const [customMode, setCustomMode] = useState(isCustom);
-  const [customText, setCustomText] = useState(isCustom ? (value as string) : "");
-  const customRef = useRef<HTMLInputElement>(null);
-
-  // Re-sync when the parent value changes (e.g. hydrated from sessionStorage
-  // or user navigated back to this question).
-  useEffect(() => {
-    const nowCustom =
-      typeof value === "string" && value.length > 0 && !options.includes(value);
-    setCustomMode(nowCustom);
-    if (nowCustom) setCustomText(value as string);
-  }, [value, options]);
-
-  const enterCustom = () => {
-    setCustomMode(true);
-    setCustomText((prev) => (prev.length ? prev : ""));
-    onChange(customText.trim());
-    setTimeout(() => customRef.current?.focus(), 0);
-  };
-
   return (
     <div className="flex flex-col gap-3">
       {options.map((o) => {
-        const active = !customMode && value === o;
+        const active = value === o;
         return (
           <button
             key={o}
-            onClick={() => {
-              setCustomMode(false);
-              onChange(o);
-            }}
+            onClick={() => onChange(o)}
             className={`group flex items-center justify-between border-b border-border px-1 py-5 text-left transition ${
               active ? "border-accent" : "hover:border-foreground/40"
             }`}
@@ -303,46 +403,6 @@ function ChoiceInput({
           </button>
         );
       })}
-
-      {/* Other — write your own */}
-      {!customMode ? (
-        <button
-          onClick={enterCustom}
-          className="group flex items-center justify-between border-b border-dashed border-border px-1 py-5 text-left transition hover:border-foreground/40"
-        >
-          <span className="font-display text-2xl italic text-foreground/60 transition group-hover:text-foreground/90 md:text-3xl">
-            Something else — write your own
-          </span>
-          <span className="text-xs uppercase tracking-[0.3em] text-muted-foreground group-hover:text-foreground/80">
-            + Other
-          </span>
-        </button>
-      ) : (
-        <div className="flex items-center gap-3 border-b border-accent px-1 py-4">
-          <input
-            ref={customRef}
-            type="text"
-            value={customText}
-            maxLength={140}
-            placeholder="In your own words…"
-            onChange={(e) => {
-              setCustomText(e.target.value);
-              onChange(e.target.value.trim());
-            }}
-            className="w-full border-0 bg-transparent font-display text-2xl text-foreground placeholder:italic placeholder:text-muted-foreground/60 focus:outline-none md:text-3xl"
-          />
-          <button
-            onClick={() => {
-              setCustomMode(false);
-              setCustomText("");
-              onChange("");
-            }}
-            className="text-xs uppercase tracking-[0.3em] text-muted-foreground transition hover:text-foreground"
-          >
-            Cancel
-          </button>
-        </div>
-      )}
     </div>
   );
 }

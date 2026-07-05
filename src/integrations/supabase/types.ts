@@ -38,6 +38,27 @@ export type Database = {
         }
         Relationships: []
       }
+      responses: {
+        Row: {
+          age_group: string
+          answers: Json
+          created_at: string
+          id: string
+        }
+        Insert: {
+          age_group: string
+          answers: Json
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          age_group?: string
+          answers?: Json
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
       wall_entries: {
         Row: {
           created_at: string

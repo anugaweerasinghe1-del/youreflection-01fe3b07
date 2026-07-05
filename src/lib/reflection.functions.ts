@@ -2,8 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { generateText } from "ai";
 import { QUESTIONS } from "./questions";
+import { generateLetterCascade } from "./reflection-providers.server";
 
 const AnswersSchema = z.record(z.string(), z.union([z.string(), z.number()]));
+const AgeGroupSchema = z.enum(["13-17", "18-24", "25-34", "35-44", "45+"]);
 
 const LetterSchema = z.object({
   title: z.string(),
@@ -17,7 +19,6 @@ const LetterSchema = z.object({
   closing: z.string(),
 });
 
-// Loosened schema — clamp in code afterwards instead of failing validation.
 const InsightsSchema = z.object({
   strengths: z.array(z.string()).default([]),
   values: z.array(z.string()).default([]),
@@ -42,7 +43,7 @@ Your purpose is to gently help the reader recognise patterns, discover hidden st
 
 Your writing is quiet, elegant, deeply human, warm, calm, and hopeful — the way a thoughtful mentor might write a personal letter. Prefer specificity over generality. Prefer noticing over prescribing. Prefer questions over instructions.
 
-Address the reader as "you". Keep sentences varied and unhurried. Do not repeat the reader's answers back verbatim — weave what they shared into observations. Never invent facts they didn't share. Reference specifics they wrote — the exact phrases, the specific person, the specific tension between two of their answers.
+Address the reader as "you". Keep sentences varied and unhurried. Do not repeat the reader's answers back verbatim — weave what they shared into observations. Never invent facts they didn't share. Reference specifics they wrote — the exact tension between two of their answers, or how their reflections diverge from their view of society.
 
 Return ONLY valid JSON. No markdown fences. No commentary before or after. The very first character must be { and the very last must be }.
 
@@ -101,7 +102,7 @@ function buildUserPrompt(answers: AnswerMap): string {
       ? `\n\n## Patterns worth noticing (do not quote this back — use it to inform tone)\n${signals.map((s) => `- ${s}`).join("\n")}`
       : "";
 
-  return `Here is what the reader shared, grouped by theme. Write their reflection letter and insights. Reference the specific tensions and phrases they used — not generic observations.\n\n${grouped}${signalsBlock}\n\nReturn ONLY a JSON object with exactly this shape:\n${OUTPUT_SHAPE}`;
+  return `Here is what the reader shared. The "Reflection" answers are about themselves; the "Society" answers are their view of the world. Notice both — and any tension between them.\n\n${grouped}${signalsBlock}\n\nReturn ONLY a JSON object with exactly this shape:\n${OUTPUT_SHAPE}`;
 }
 
 function detectSignals(answers: AnswerMap): string[] {
@@ -147,19 +148,19 @@ function detectSignals(answers: AnswerMap): string[] {
     out.push("Current relational landscape feels distant or one-sided.");
   }
 
-  const purpose = str("purpose_meaning");
-  if (purpose === "Missing" || purpose === "Uncertain") {
-    out.push("Meaning feels uncertain or missing right now.");
+  const importance = num("appearance_importance");
+  if (importance !== null && importance >= 4 && mirror !== null && mirror <= 4) {
+    out.push("Sees appearance as very important in society, and is hard on themselves in the mirror — external pressure has been internalised.");
   }
 
-  const innerSentence = str("worth_inner_sentence");
-  if (innerSentence && innerSentence.length > 10) {
-    out.push(`Carries a specific harsh inner sentence — reference it gently, do not quote it verbatim.`);
+  const celeb = num("celebrity_influence");
+  if (celeb !== null && celeb >= 4 && compScale !== null && compScale >= 6) {
+    out.push("Believes celebrities shape beauty standards strongly, and compares themselves often — the standards are being measured against.");
   }
 
-  const becoming = str("growth_becoming");
-  if (becoming && /revenge|prove|regret|underestimated|took me seriously|took him seriously|took her seriously/i.test(becoming)) {
-    out.push("The version they want to become is defined in relation to others' recognition — worth-through-vindication rather than worth-in-itself.");
+  const pressure = str("pressure_source");
+  if (pressure === "Yourself") {
+    out.push("Names themselves as the biggest source of pressure to look a certain way — the pressure is coming from inside.");
   }
 
   return out;
@@ -201,76 +202,38 @@ function normalize(parsed: { letter: Letter; insights: Insights }): { letter: Le
   };
 }
 
-/* ---------- Model chain ---------- */
-
-const MODEL_CHAIN = [
-  "google/gemini-3-flash-preview",
-  "google/gemini-2.5-flash",
-  "openai/gpt-5-mini",
-] as const;
-
-async function tryGenerate(
-  systemPrompt: string,
-  userPrompt: string,
-): Promise<{ output: { letter: Letter; insights: Insights }; modelUsed: string }> {
-  const { createGateway } = await import("./ai-gateway.server");
-  const gateway = createGateway();
-
-  let lastErr: unknown = null;
-  for (const modelId of MODEL_CHAIN) {
-    try {
-      const model = gateway(modelId);
-      const { text, finishReason } = await generateText({
-        model,
-        system: systemPrompt,
-        prompt: userPrompt,
-        maxRetries: 0,
-      });
-
-      if (finishReason === "length") {
-        console.warn(`[reflection] model ${modelId} returned finishReason=length`);
-        lastErr = new Error("truncated");
-        continue;
-      }
-
-      const raw = extractJson(text);
-      const parsed = OutputSchema.parse(raw);
-      return { output: parsed, modelUsed: modelId };
-    } catch (err) {
-      lastErr = err;
-      console.error(`[reflection] model ${modelId} failed:`, err instanceof Error ? err.message : err);
-      continue;
-    }
-  }
-  throw lastErr instanceof Error ? lastErr : new Error("all models failed");
-}
-
 /* ---------- Server functions ---------- */
 
 export const generateLetter = createServerFn({ method: "POST" })
   .validator((data: unknown) => {
-    const parsed = z.object({ answers: AnswersSchema }).parse(data);
-    return { answers: parsed.answers as AnswerMap };
+    const parsed = z.object({
+      answers: AnswersSchema,
+      ageGroup: AgeGroupSchema,
+    }).parse(data);
+    return { answers: parsed.answers as AnswerMap, ageGroup: parsed.ageGroup };
   })
   .handler(async ({ data }) => {
     const userPrompt = buildUserPrompt(data.answers);
 
-    // Stage 1 + 2: generate + parse (with fallback chain)
+    // Stage 1: cascade through the three tiers.
     let generated: { letter: Letter; insights: Insights };
     let modelUsed = "unknown";
     try {
-      const result = await tryGenerate(SYSTEM_PROMPT, userPrompt);
-      generated = normalize(result.output);
-      modelUsed = result.modelUsed;
+      const cascade = await generateLetterCascade(SYSTEM_PROMPT, userPrompt);
+      modelUsed = cascade.modelUsed;
+      const parsed = OutputSchema.parse(extractJson(cascade.text));
+      generated = normalize(parsed);
       console.log(`[reflection] generated with ${modelUsed}`);
     } catch (err) {
-      console.error("[reflection] all model attempts failed:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[reflection] all tiers failed:", msg);
       throw new Error(
-        "Our writer is quiet right now. Please try again in a moment — your answers are safe.",
+        `Our writers are quiet right now. Please try again in a moment. (${msg.slice(0, 140)})`,
       );
     }
 
-    // Stage 3: persist. If DB fails, still return the letter inline.
+    // Stage 2a: persist personal session (for the letter page).
+    let sessionId: string | null = null;
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const { data: inserted, error } = await supabaseAdmin
@@ -282,32 +245,33 @@ export const generateLetter = createServerFn({ method: "POST" })
         })
         .select("id")
         .single();
-
       if (error || !inserted) {
-        console.error("[reflection] insert failed (returning inline):", error);
-        return {
-          sessionId: null as string | null,
-          letter: generated.letter,
-          insights: generated.insights,
-          modelUsed,
-        };
+        console.error("[reflection] session insert failed (returning inline):", error);
+      } else {
+        sessionId = inserted.id as string;
       }
-
-      return {
-        sessionId: inserted.id as string,
-        letter: generated.letter,
-        insights: generated.insights,
-        modelUsed,
-      };
     } catch (err) {
-      console.error("[reflection] persistence error (returning inline):", err);
-      return {
-        sessionId: null as string | null,
-        letter: generated.letter,
-        insights: generated.insights,
-        modelUsed,
-      };
+      console.error("[reflection] session persistence error:", err);
     }
+
+    // Stage 2b: persist anonymous aggregate row (for /results). Never blocks.
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { error } = await supabaseAdmin.from("responses").insert({
+        age_group: data.ageGroup,
+        answers: data.answers,
+      });
+      if (error) console.error("[responses] insert failed:", error);
+    } catch (err) {
+      console.error("[responses] insert error:", err);
+    }
+
+    return {
+      sessionId,
+      letter: generated.letter,
+      insights: generated.insights,
+      modelUsed,
+    };
   });
 
 export const getSession = createServerFn({ method: "GET" })

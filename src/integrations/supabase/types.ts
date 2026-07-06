@@ -88,7 +88,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_response_aggregates: { Args: never; Returns: Json }
     }
     Enums: {
       wall_status: "pending" | "approved" | "rejected"

@@ -18,7 +18,9 @@ export const Route = createFileRoute("/wall")({
         property: "og:description",
         content: "Anonymous sentences left by strangers, for strangers.",
       },
+      { property: "og:url", content: "https://ai.youreflections.workers.dev/wall" },
     ],
+    links: [{ rel: "canonical", href: "https://ai.youreflections.workers.dev/wall" }],
   }),
   component: WallPage,
 });

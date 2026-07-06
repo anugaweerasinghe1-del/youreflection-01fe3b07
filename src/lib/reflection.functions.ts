@@ -320,42 +320,77 @@ export const submitWallEntry = createServerFn({ method: "POST" })
     return { message: parsed.message };
   })
   .handler(async ({ data }) => {
-    const { createGateway, REFLECTION_MODEL } = await import("./ai-gateway.server");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    const gateway = createGateway();
-    const model = gateway(REFLECTION_MODEL);
-
-    let decision: "approve" | "reject" = "reject";
-    let reason = "Could not moderate.";
-    let cleaned = data.message;
+    // Moderation is best-effort. If every AI tier fails/times out, we still
+    // accept the message as 'pending' so it lands in the DB and the user
+    // gets a friendly response instead of a hard error.
+    let decision: "approve" | "reject" | "pending" = "pending";
+    let reason = "Awaiting review.";
+    let cleaned = data.message.trim();
 
     try {
-      const { text } = await generateText({
+      const { createGateway, REFLECTION_MODEL } = await import("./ai-gateway.server");
+      const gateway = createGateway();
+      const model = gateway(REFLECTION_MODEL);
+
+      const modPromise = generateText({
         model,
         system: MOD_SYSTEM,
         prompt: `Return JSON with exactly this shape: {"decision":"approve","reason":"","cleaned_message":""}. Message: """${data.message}"""`,
         maxRetries: 1,
       });
+      const timeout = new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error("moderation_timeout")), 8000),
+      );
+      const { text } = (await Promise.race([modPromise, timeout])) as { text: string };
       const object = ModSchema.parse(extractJson(text));
       decision = object.decision;
-      reason = object.reason;
-      cleaned = object.cleaned_message?.trim() || data.message;
+      reason = object.reason?.slice(0, 500) || reason;
+      const candidate = object.cleaned_message?.trim();
+      if (candidate && candidate.length >= 1) cleaned = candidate;
     } catch (err) {
-      console.error("[wall] moderation failed", err);
+      console.error("[wall] moderation failed, defaulting to pending", err);
+      decision = "pending";
+      reason = "Awaiting review.";
     }
 
-    const status = decision === "approve" ? "approved" : "rejected";
+    const safeMessage = cleaned.slice(0, 240);
+    const status: "approved" | "rejected" | "pending" =
+      decision === "approve" ? "approved" : decision === "reject" ? "rejected" : "pending";
 
-    const { error } = await supabaseAdmin.from("wall_entries").insert({
-      message: cleaned.slice(0, 240),
-      status,
-      moderation_reason: reason.slice(0, 500),
+    // Insert via SECURITY DEFINER RPC — bypasses table INSERT policy and
+    // works regardless of whether the server client authenticates as
+    // service_role or anon.
+    const { createClient } = await import("@supabase/supabase-js");
+    const url = process.env.SUPABASE_URL!;
+    const key = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY!;
+    const sb = createClient(url, key, {
+      auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+      global: {
+        fetch: (input, init) => {
+          const h = new Headers(init?.headers ?? {});
+          h.set("apikey", key);
+          if (h.get("Authorization") === `Bearer ${key}`) h.delete("Authorization");
+          return fetch(input, { ...init, headers: h });
+        },
+      },
     });
 
-    if (error) {
-      console.error("[wall] insert failed", error);
-      throw new Error("Could not save your message. Please try again.");
+    const { data: newId, error } = await sb.rpc("submit_wall_entry", {
+      _message: safeMessage,
+      _status: status,
+      _reason: reason.slice(0, 500),
+    });
+
+    if (error || !newId) {
+      console.error("[wall] insert failed", {
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        code: error?.code,
+      });
+      throw new Error(
+        `Could not save your message. Please try again. (${error?.message ?? "unknown"})`,
+      );
     }
 
     return { status, reason };

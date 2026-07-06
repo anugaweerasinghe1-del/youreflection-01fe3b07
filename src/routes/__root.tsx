@@ -82,18 +82,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "A quiet, cinematic reflection experience. Understand yourself — beyond appearance, comparison, and judgement.",
       },
       { name: "theme-color", content: "#050505" },
+      { property: "og:site_name", content: "Beyond What You See" },
+      { property: "og:type", content: "website" },
       { property: "og:title", content: "Beyond What You See — An AI-Powered Self Reflection Experience" },
       {
         property: "og:description",
         content:
-          "An AI-powered reflection experience designed to help you understand yourself — not judge yourself.",
+          "A quiet, cinematic reflection experience. Understand yourself — beyond appearance, comparison, and judgement.",
       },
-      { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Beyond What You See — An AI-Powered Self Reflection Experience" },
-      { name: "description", content: "A quiet, cinematic reflection experience. Understand yourself — beyond appearance, comparison, and judgement." },
-      { property: "og:description", content: "A quiet, cinematic reflection experience. Understand yourself — beyond appearance, comparison, and judgement." },
-      { name: "twitter:description", content: "A quiet, cinematic reflection experience. Understand yourself — beyond appearance, comparison, and judgement." },
+      {
+        name: "twitter:description",
+        content:
+          "A quiet, cinematic reflection experience. Understand yourself — beyond appearance, comparison, and judgement.",
+      },
       { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/5dce55e9-f86c-4ff0-9e22-19fcb383b255/id-preview-f18cf698--c368dadb-b0f2-4024-9384-870867365368.lovable.app-1783006358660.png" },
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/5dce55e9-f86c-4ff0-9e22-19fcb383b255/id-preview-f18cf698--c368dadb-b0f2-4024-9384-870867365368.lovable.app-1783006358660.png" },
     ],

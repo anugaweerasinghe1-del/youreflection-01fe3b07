@@ -85,16 +85,38 @@ function buildConclusion(agg: Aggregates): string {
   return bits.join(" ");
 }
 
+type RpcShape = {
+  total: number;
+  by_age_group: Record<string, number>;
+  by_question: Record<string, Record<string, number>>;
+  updated_at: string;
+};
+
 export const getAggregates = createServerFn({ method: "GET" }).handler(async () => {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { createClient } = await import("@supabase/supabase-js");
 
-  const { data: rows, error } = await supabaseAdmin
-    .from("responses")
-    .select("age_group, answers, created_at")
-    .order("created_at", { ascending: false });
+  // Raw `responses` rows are NOT readable from the browser (SELECT policy
+  // revoked). We call a SECURITY DEFINER RPC that only returns counts —
+  // never any individual answer. Using the publishable-key client here so we
+  // don't depend on JWT-format service-role keys.
+  const url = process.env.SUPABASE_URL!;
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY!;
+  const sb = createClient(url, key, {
+    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+    global: {
+      fetch: (input, init) => {
+        const h = new Headers(init?.headers ?? {});
+        h.set("apikey", key);
+        if (h.get("Authorization") === `Bearer ${key}`) h.delete("Authorization");
+        return fetch(input, { ...init, headers: h });
+      },
+    },
+  });
 
-  if (error) {
-    console.error("[aggregates] read failed", error);
+  const { data, error } = await sb.rpc("get_response_aggregates");
+
+  if (error || !data) {
+    console.error("[aggregates] rpc failed", error);
     return {
       total: 0,
       byAgeGroup: {},
@@ -104,51 +126,43 @@ export const getAggregates = createServerFn({ method: "GET" }).handler(async () 
     } as Aggregates;
   }
 
-  const list = (rows ?? []) as Row[];
-  const total = list.length;
+  const rpc = data as unknown as RpcShape;
 
   const byAgeGroup: Record<string, number> = { "13-17": 0, "18-24": 0, "25-34": 0, "35-44": 0, "45+": 0 };
-  for (const r of list) {
-    if (byAgeGroup[r.age_group] !== undefined) byAgeGroup[r.age_group]++;
+  for (const [k, v] of Object.entries(rpc.by_age_group ?? {})) {
+    if (byAgeGroup[k] !== undefined) byAgeGroup[k] = v;
   }
 
   const byQuestion = emptyAggregatesFor();
-  const scaleSums: Record<string, { sum: number; n: number }> = {};
-
-  for (const r of list) {
-    for (const agg of byQuestion) {
-      const raw = r.answers?.[agg.id];
-      if (raw === undefined || raw === null || raw === "") continue;
-      if (agg.type === "choice" && typeof raw === "string") {
-        if (agg.counts[raw] === undefined) agg.counts[raw] = 0;
-        agg.counts[raw]++;
-        agg.total++;
-      } else if (agg.type === "scale") {
-        const n = typeof raw === "number" ? raw : Number(raw);
-        if (!Number.isFinite(n)) continue;
-        const key = String(Math.round(n));
-        if (agg.counts[key] === undefined) agg.counts[key] = 0;
-        agg.counts[key]++;
-        agg.total++;
-        const s = scaleSums[agg.id] ?? { sum: 0, n: 0 };
-        s.sum += n; s.n++;
-        scaleSums[agg.id] = s;
+  for (const agg of byQuestion) {
+    const raw = rpc.by_question?.[agg.id];
+    if (!raw) continue;
+    let sum = 0, n = 0;
+    for (const [key, count] of Object.entries(raw)) {
+      if (agg.type === "choice") {
+        if (agg.counts[key] !== undefined) {
+          agg.counts[key] = count;
+          agg.total += count;
+        }
+      } else {
+        const num = Number(key);
+        if (!Number.isFinite(num)) continue;
+        const bucket = String(Math.round(num));
+        if (agg.counts[bucket] !== undefined) agg.counts[bucket] += count;
+        agg.total += count;
+        sum += num * count;
+        n += count;
       }
     }
-  }
-  for (const agg of byQuestion) {
-    if (agg.type === "scale") {
-      const s = scaleSums[agg.id];
-      agg.mean = s && s.n > 0 ? s.sum / s.n : 0;
-    }
+    if (agg.type === "scale") agg.mean = n > 0 ? sum / n : 0;
   }
 
   const result: Aggregates = {
-    total,
+    total: rpc.total ?? 0,
     byAgeGroup,
     byQuestion,
     conclusion: "",
-    updatedAt: new Date().toISOString(),
+    updatedAt: rpc.updated_at ?? new Date().toISOString(),
   };
   result.conclusion = buildConclusion(result);
   return result;

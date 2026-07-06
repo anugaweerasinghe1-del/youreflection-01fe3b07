@@ -89,6 +89,14 @@ export type Database = {
     }
     Functions: {
       get_response_aggregates: { Args: never; Returns: Json }
+      submit_wall_entry: {
+        Args: {
+          _message: string
+          _reason: string
+          _status: Database["public"]["Enums"]["wall_status"]
+        }
+        Returns: string
+      }
     }
     Enums: {
       wall_status: "pending" | "approved" | "rejected"

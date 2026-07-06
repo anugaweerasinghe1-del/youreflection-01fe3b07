@@ -320,11 +320,9 @@ export const submitWallEntry = createServerFn({ method: "POST" })
     return { message: parsed.message };
   })
   .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
     // Moderation is best-effort. If every AI tier fails/times out, we still
-    // accept the message with status='pending' so it lands in the database
-    // and the user gets a friendly "received" response instead of a hard error.
+    // accept the message as 'pending' so it lands in the DB and the user
+    // gets a friendly response instead of a hard error.
     let decision: "approve" | "reject" | "pending" = "pending";
     let reason = "Awaiting review.";
     let cleaned = data.message.trim();
@@ -355,22 +353,35 @@ export const submitWallEntry = createServerFn({ method: "POST" })
       reason = "Awaiting review.";
     }
 
-    // Enforce column limits before insert.
     const safeMessage = cleaned.slice(0, 240);
     const status: "approved" | "rejected" | "pending" =
       decision === "approve" ? "approved" : decision === "reject" ? "rejected" : "pending";
 
-    const { data: inserted, error } = await supabaseAdmin
-      .from("wall_entries")
-      .insert({
-        message: safeMessage,
-        status,
-        moderation_reason: reason.slice(0, 500),
-      })
-      .select("id, status")
-      .single();
+    // Insert via SECURITY DEFINER RPC — bypasses table INSERT policy and
+    // works regardless of whether the server client authenticates as
+    // service_role or anon.
+    const { createClient } = await import("@supabase/supabase-js");
+    const url = process.env.SUPABASE_URL!;
+    const key = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY!;
+    const sb = createClient(url, key, {
+      auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+      global: {
+        fetch: (input, init) => {
+          const h = new Headers(init?.headers ?? {});
+          h.set("apikey", key);
+          if (h.get("Authorization") === `Bearer ${key}`) h.delete("Authorization");
+          return fetch(input, { ...init, headers: h });
+        },
+      },
+    });
 
-    if (error || !inserted) {
+    const { data: newId, error } = await sb.rpc("submit_wall_entry", {
+      _message: safeMessage,
+      _status: status,
+      _reason: reason.slice(0, 500),
+    });
+
+    if (error || !newId) {
       console.error("[wall] insert failed", {
         message: error?.message,
         details: error?.details,
@@ -382,7 +393,7 @@ export const submitWallEntry = createServerFn({ method: "POST" })
       );
     }
 
-    return { status: inserted.status, reason };
+    return { status, reason };
   });
 
 export const listWallEntries = createServerFn({ method: "GET" }).handler(async () => {

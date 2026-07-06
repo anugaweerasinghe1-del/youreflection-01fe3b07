@@ -53,11 +53,15 @@ function Index() {
 
 function Hero() {
   const [phase, setPhase] = useState(0);
+
   useEffect(() => {
-    const t1 = setTimeout(() => setPhase(1), 1200);
-    const t2 = setTimeout(() => setPhase(2), 3600);
-    const t3 = setTimeout(() => setPhase(3), 6200);
-    return () => [t1, t2, t3].forEach(clearTimeout);
+    const timers = [
+      setTimeout(() => setPhase(1), 1200),
+      setTimeout(() => setPhase(2), 3600),
+      setTimeout(() => setPhase(3), 6200),
+    ];
+
+    return () => timers.forEach(clearTimeout);
   }, []);
 
   return (
@@ -82,9 +86,7 @@ function Hero() {
       <div className="relative z-10 mx-auto flex max-w-5xl flex-col items-start px-6 md:px-10">
         {phase < 2 && (
           <div className="min-h-[60vh] flex flex-col justify-center gap-6">
-            <p
-              className="font-display animate-fade-up text-3xl italic text-foreground/90 md:text-5xl"
-            >
+            <p className="font-display animate-fade-up text-3xl italic text-foreground/90 md:text-5xl">
               The longest conversation you'll ever have…
             </p>
             <p
@@ -135,9 +137,7 @@ function Hero() {
       </div>
 
       {phase >= 3 && (
-        <div
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 text-[10px] uppercase tracking-[0.4em] text-muted-foreground opacity-60 transition-opacity duration-[2000ms]"
-        >
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 text-[10px] uppercase tracking-[0.4em] text-muted-foreground opacity-60 transition-opacity duration-[2000ms]">
           scroll ↓
         </div>
       )}
@@ -217,21 +217,25 @@ function Statistics() {
 function AnimatedNumber({ value, suffix }: { value: number; suffix?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [display, setDisplay] = useState(0);
+
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+
     const obs = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => {
           if (e.isIntersecting) {
             const start = performance.now();
             const duration = 1800;
+
             const tick = (t: number) => {
               const p = Math.min(1, (t - start) / duration);
               const eased = 1 - Math.pow(1 - p, 3);
               setDisplay(Math.round(value * eased));
               if (p < 1) requestAnimationFrame(tick);
             };
+
             requestAnimationFrame(tick);
             obs.disconnect();
           }
@@ -239,11 +243,16 @@ function AnimatedNumber({ value, suffix }: { value: number; suffix?: string }) {
       },
       { threshold: 0.4 },
     );
+
     obs.observe(el);
     return () => obs.disconnect();
   }, [value]);
+
   return (
-    <span ref={ref} className="font-display block text-[clamp(4rem,8vw,7rem)] leading-none text-foreground">
+    <span
+      ref={ref}
+      className="font-display block text-[clamp(4rem,8vw,7rem)] leading-none text-foreground"
+    >
       {display}
       <span className="text-accent">{suffix}</span>
     </span>
@@ -331,6 +340,7 @@ function ParallaxImage({
 
 function HowItWorks() {
   const steps = ["Reflect", "Discover", "Understand", "Grow"];
+
   return (
     <section className="relative overflow-hidden bg-surface py-40 md:py-56">
       <div className="mx-auto max-w-7xl px-6 md:px-10">
@@ -376,7 +386,6 @@ function CommunityPreview() {
   const remote = (data?.entries ?? []).map((e) => e.message).filter(Boolean);
   const lines = remote.length >= 4 ? remote.slice(0, 24) : FALLBACK_LINES;
 
-  // Split into two rows for the opposing marquees.
   const mid = Math.ceil(lines.length / 2);
   const rowA = lines.slice(0, mid);
   const rowB = lines.slice(mid).length >= 2 ? lines.slice(mid) : lines.slice(0, mid);
@@ -394,7 +403,6 @@ function CommunityPreview() {
 
         <Reveal delay={0.15}>
           <div className="group relative mt-20 h-[520px] overflow-hidden md:h-[600px]">
-            {/* top/bottom fade masks */}
             <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-32 bg-gradient-to-b from-background to-transparent" />
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-32 bg-gradient-to-t from-background to-transparent" />
 
@@ -430,8 +438,8 @@ function MarqueeColumn({
   lines: string[];
   direction: "up" | "down";
 }) {
-  // Duplicate the list so the CSS translate loop is seamless.
   const doubled = [...lines, ...lines];
+
   return (
     <div className="relative h-full overflow-hidden">
       <div

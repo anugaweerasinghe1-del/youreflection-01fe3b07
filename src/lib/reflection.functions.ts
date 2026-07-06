@@ -320,45 +320,69 @@ export const submitWallEntry = createServerFn({ method: "POST" })
     return { message: parsed.message };
   })
   .handler(async ({ data }) => {
-    const { createGateway, REFLECTION_MODEL } = await import("./ai-gateway.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const gateway = createGateway();
-    const model = gateway(REFLECTION_MODEL);
-
-    let decision: "approve" | "reject" = "reject";
-    let reason = "Could not moderate.";
-    let cleaned = data.message;
+    // Moderation is best-effort. If every AI tier fails/times out, we still
+    // accept the message with status='pending' so it lands in the database
+    // and the user gets a friendly "received" response instead of a hard error.
+    let decision: "approve" | "reject" | "pending" = "pending";
+    let reason = "Awaiting review.";
+    let cleaned = data.message.trim();
 
     try {
-      const { text } = await generateText({
+      const { createGateway, REFLECTION_MODEL } = await import("./ai-gateway.server");
+      const gateway = createGateway();
+      const model = gateway(REFLECTION_MODEL);
+
+      const modPromise = generateText({
         model,
         system: MOD_SYSTEM,
         prompt: `Return JSON with exactly this shape: {"decision":"approve","reason":"","cleaned_message":""}. Message: """${data.message}"""`,
         maxRetries: 1,
       });
+      const timeout = new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error("moderation_timeout")), 8000),
+      );
+      const { text } = (await Promise.race([modPromise, timeout])) as { text: string };
       const object = ModSchema.parse(extractJson(text));
       decision = object.decision;
-      reason = object.reason;
-      cleaned = object.cleaned_message?.trim() || data.message;
+      reason = object.reason?.slice(0, 500) || reason;
+      const candidate = object.cleaned_message?.trim();
+      if (candidate && candidate.length >= 1) cleaned = candidate;
     } catch (err) {
-      console.error("[wall] moderation failed", err);
+      console.error("[wall] moderation failed, defaulting to pending", err);
+      decision = "pending";
+      reason = "Awaiting review.";
     }
 
-    const status = decision === "approve" ? "approved" : "rejected";
+    // Enforce column limits before insert.
+    const safeMessage = cleaned.slice(0, 240);
+    const status: "approved" | "rejected" | "pending" =
+      decision === "approve" ? "approved" : decision === "reject" ? "rejected" : "pending";
 
-    const { error } = await supabaseAdmin.from("wall_entries").insert({
-      message: cleaned.slice(0, 240),
-      status,
-      moderation_reason: reason.slice(0, 500),
-    });
+    const { data: inserted, error } = await supabaseAdmin
+      .from("wall_entries")
+      .insert({
+        message: safeMessage,
+        status,
+        moderation_reason: reason.slice(0, 500),
+      })
+      .select("id, status")
+      .single();
 
-    if (error) {
-      console.error("[wall] insert failed", error);
-      throw new Error("Could not save your message. Please try again.");
+    if (error || !inserted) {
+      console.error("[wall] insert failed", {
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        code: error?.code,
+      });
+      throw new Error(
+        `Could not save your message. Please try again. (${error?.message ?? "unknown"})`,
+      );
     }
 
-    return { status, reason };
+    return { status: inserted.status, reason };
   });
 
 export const listWallEntries = createServerFn({ method: "GET" }).handler(async () => {

@@ -1,10 +1,10 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useQueryClient } from "@tanstack/react-query";
 import { Nav } from "@/components/nav";
 import { getAggregates, type Aggregates, type QuestionAggregate } from "@/lib/aggregates.functions";
-import { supabase } from "@/integrations/supabase/client";
+
+const SITE_URL = "https://ai.youreflections.workers.dev";
 
 export const Route = createFileRoute("/results")({
   head: () => ({
@@ -21,34 +21,23 @@ export const Route = createFileRoute("/results")({
         content:
           "See what everyone's sharing about self-image and beauty standards, updated live.",
       },
+      { property: "og:url", content: `${SITE_URL}/results` },
     ],
+    links: [{ rel: "canonical", href: `${SITE_URL}/results` }],
   }),
   component: ResultsPage,
 });
 
 function ResultsPage() {
-  const queryClient = useQueryClient();
+  // Raw `responses` rows are no longer readable from the browser (SELECT
+  // policy revoked for privacy). We poll the server-side aggregate function
+  // every 10s instead — same effect, no PII exposed to the client.
   const { data, isLoading, error } = useQuery({
     queryKey: ["aggregates"],
     queryFn: () => getAggregates(),
-    refetchInterval: 20_000,
+    refetchInterval: 10_000,
     refetchOnWindowFocus: true,
   });
-
-  // Realtime: invalidate on every INSERT into responses.
-  useEffect(() => {
-    const channel = supabase
-      .channel("responses-live")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "responses" },
-        () => queryClient.invalidateQueries({ queryKey: ["aggregates"] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [queryClient]);
 
   return (
     <div className="grain min-h-screen bg-background text-foreground">

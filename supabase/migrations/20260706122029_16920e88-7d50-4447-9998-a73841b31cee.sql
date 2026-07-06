@@ -1,0 +1,1 @@
+DELETE FROM public.wall_entries WHERE moderation_reason = 'test insert from psql';

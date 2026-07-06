@@ -9,6 +9,8 @@ import sectionReflection from "@/assets/section-reflection.jpg";
 import sectionHands from "@/assets/section-hands.jpg";
 import sectionWindow from "@/assets/section-window.jpg";
 
+const SITE_URL = "https://ai.youreflections.workers.dev";
+
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
@@ -24,7 +26,9 @@ export const Route = createFileRoute("/")({
         content:
           "An AI-powered reflection experience designed to help you understand yourself — not judge yourself.",
       },
+      { property: "og:url", content: SITE_URL },
     ],
+    links: [{ rel: "canonical", href: SITE_URL }],
   }),
   component: Index,
 });

@@ -66,7 +66,7 @@ function Hero() {
 
   return (
     <section className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-background">
-      {/* Portrait fade-in */}
+      {/* Portrait fade-in with slow cinematic drift */}
       <div
         className="absolute inset-0 transition-[opacity,transform] duration-[4000ms] ease-out"
         style={{ opacity: phase >= 2 ? 1 : 0, transform: `scale(${phase >= 2 ? 1 : 1.08})` }}
@@ -76,11 +76,21 @@ function Hero() {
           alt=""
           width={1600}
           height={1920}
-          className="h-full w-full object-cover object-[65%_center]"
+          className="h-full w-full object-cover object-[65%_center] animate-hero-drift"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/40" />
         <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-transparent to-background" />
+        {/* Cinematic vignette — lifts type contrast without dulling the image */}
+        <div
+          aria-hidden
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(ellipse at 60% 40%, transparent 40%, oklch(0.04 0.002 60 / 0.55) 100%)",
+          }}
+        />
       </div>
+
 
       {/* Opening lines */}
       <div className="relative z-10 mx-auto flex max-w-5xl flex-col items-start px-6 md:px-10">
@@ -126,11 +136,12 @@ function Hero() {
             >
               <Link
                 to="/reflect"
-                className="group inline-flex items-center gap-4 border-b border-foreground/40 pb-2 text-sm tracking-[0.2em] uppercase text-foreground transition hover:border-accent hover:text-accent"
+                className="group inline-flex items-center gap-4 rounded-full border border-foreground/25 px-7 py-3.5 text-sm uppercase tracking-[0.25em] text-foreground/95 backdrop-blur-[2px] transition hover:border-accent hover:text-accent hover:shadow-[0_0_40px_-8px_oklch(0.78_0.08_80/0.4)]"
               >
                 Begin Reflection
                 <span className="inline-block transition-transform group-hover:translate-x-1">→</span>
               </Link>
+
             </div>
           </div>
         )}
@@ -197,18 +208,23 @@ function Statistics() {
           </h2>
         </Reveal>
 
-        <div className="mt-24 grid grid-cols-1 gap-16 md:grid-cols-3 md:gap-10">
+        <div className="mt-24 grid grid-cols-1 gap-16 md:grid-cols-3 md:gap-0">
           {stats.map((s, i) => (
             <Reveal key={i} delay={i * 0.12}>
-              <div className="border-t border-border pt-8">
+              <div
+                className={`border-t border-border pt-8 md:px-10 ${
+                  i > 0 ? "md:border-l md:border-t-0 md:pt-0" : ""
+                }`}
+              >
                 <AnimatedNumber value={s.n} suffix={s.suffix} />
-                <p className="mt-6 max-w-xs text-sm leading-relaxed text-muted-foreground">
+                <p className="mt-8 max-w-xs text-sm leading-relaxed text-muted-foreground">
                   {s.label}
                 </p>
               </div>
             </Reveal>
           ))}
         </div>
+
       </div>
     </section>
   );
@@ -251,12 +267,13 @@ function AnimatedNumber({ value, suffix }: { value: number; suffix?: string }) {
   return (
     <span
       ref={ref}
-      className="font-display block text-[clamp(4rem,8vw,7rem)] leading-none text-foreground"
+      className="font-display block text-[clamp(4rem,8vw,7rem)] leading-none text-foreground tabular-nums"
     >
       {display}
-      <span className="text-accent">{suffix}</span>
+      <span className="font-light text-accent">{suffix}</span>
     </span>
   );
+
 }
 
 /* ---------- Section 4: Journey (horizontal-feeling storytelling) ---------- */
@@ -314,7 +331,7 @@ function ParallaxImage({
   body: string;
 }) {
   return (
-    <div className="relative min-h-[68vh] w-full overflow-hidden bg-surface md:min-h-[76vh]">
+    <div className="relative min-h-[68vh] w-full overflow-hidden rounded-sm bg-surface ring-1 ring-inset ring-foreground/5 md:min-h-[76vh]">
       <img
         src={src}
         alt=""
@@ -322,17 +339,20 @@ function ParallaxImage({
         className="absolute inset-0 h-full w-full scale-[1.04] object-cover"
       />
       <div className="absolute inset-0 bg-gradient-to-r from-background/85 via-background/35 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-b from-background/25 via-transparent to-background/55" />
+      <div className="absolute inset-0 bg-gradient-to-b from-background/25 via-transparent to-background/60" />
       <div className="absolute inset-x-0 bottom-0 p-8 md:p-14">
-        <p className="text-[10px] uppercase tracking-[0.4em] text-accent/75">
-          {String(index + 1).padStart(2, "0")}
-        </p>
-        <h3 className="font-display mt-6 max-w-2xl text-balance text-[clamp(2rem,4vw,4rem)] leading-[1.04]">
-          {title}
-        </h3>
-        <p className="mt-6 max-w-lg text-base leading-relaxed text-foreground/75">{body}</p>
+        <div className="inline-block max-w-2xl rounded-sm bg-background/25 p-6 backdrop-blur-[3px] md:p-8">
+          <p className="text-[10px] uppercase tracking-[0.4em] text-accent/80">
+            {String(index + 1).padStart(2, "0")}
+          </p>
+          <h3 className="font-display mt-5 max-w-2xl text-balance text-[clamp(2rem,4vw,4rem)] leading-[1.04]">
+            {title}
+          </h3>
+          <p className="mt-5 max-w-lg text-base leading-relaxed text-foreground/80">{body}</p>
+        </div>
       </div>
     </div>
+
   );
 }
 
@@ -351,13 +371,14 @@ function HowItWorks() {
           {steps.map((s, i) => (
             <Reveal key={s} delay={i * 0.08}>
               <div className="border-t border-border pt-8">
-                <p className="font-display text-sm text-muted-foreground">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border font-mono text-[11px] tabular-nums text-muted-foreground">
                   {String(i + 1).padStart(2, "0")}
-                </p>
+                </span>
                 <h3 className="font-display mt-8 text-4xl md:text-5xl">{s}</h3>
               </div>
             </Reveal>
           ))}
+
         </div>
       </div>
     </section>
@@ -465,7 +486,15 @@ function MarqueeColumn({
 function FinalCTA() {
   return (
     <section className="relative overflow-hidden bg-background py-48 md:py-64">
-      <div className="mx-auto max-w-5xl px-6 text-center md:px-10">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-0"
+        style={{
+          background:
+            "radial-gradient(ellipse at 50% 45%, oklch(0.78 0.08 80 / 0.10) 0%, transparent 60%)",
+        }}
+      />
+      <div className="relative mx-auto max-w-5xl px-6 text-center md:px-10">
         <Reveal>
           <h2 className="font-display text-[clamp(2.5rem,7vw,6rem)] leading-[0.95] text-balance">
             You are more than<br />
@@ -481,7 +510,7 @@ function FinalCTA() {
           <div className="mt-16">
             <Link
               to="/reflect"
-              className="group inline-flex items-center gap-4 border-b border-foreground/50 pb-2 text-sm uppercase tracking-[0.3em] text-foreground transition hover:border-accent hover:text-accent"
+              className="group inline-flex items-center gap-4 rounded-full border border-foreground/40 px-8 py-3.5 text-sm uppercase tracking-[0.3em] text-foreground transition hover:border-accent hover:text-accent hover:shadow-[0_0_50px_-8px_oklch(0.78_0.08_80/0.45)]"
             >
               Begin your reflection
               <span className="inline-block transition-transform group-hover:translate-x-1">→</span>
@@ -492,6 +521,7 @@ function FinalCTA() {
     </section>
   );
 }
+
 
 function Footer() {
   return (

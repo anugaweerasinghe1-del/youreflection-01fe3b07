@@ -371,13 +371,14 @@ function HowItWorks() {
           {steps.map((s, i) => (
             <Reveal key={s} delay={i * 0.08}>
               <div className="border-t border-border pt-8">
-                <p className="font-display text-sm text-muted-foreground">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border font-mono text-[11px] tabular-nums text-muted-foreground">
                   {String(i + 1).padStart(2, "0")}
-                </p>
+                </span>
                 <h3 className="font-display mt-8 text-4xl md:text-5xl">{s}</h3>
               </div>
             </Reveal>
           ))}
+
         </div>
       </div>
     </section>

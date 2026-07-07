@@ -66,7 +66,7 @@ function Hero() {
 
   return (
     <section className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-background">
-      {/* Portrait fade-in */}
+      {/* Portrait fade-in with slow cinematic drift */}
       <div
         className="absolute inset-0 transition-[opacity,transform] duration-[4000ms] ease-out"
         style={{ opacity: phase >= 2 ? 1 : 0, transform: `scale(${phase >= 2 ? 1 : 1.08})` }}
@@ -76,11 +76,21 @@ function Hero() {
           alt=""
           width={1600}
           height={1920}
-          className="h-full w-full object-cover object-[65%_center]"
+          className="h-full w-full object-cover object-[65%_center] animate-hero-drift"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/40" />
         <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-transparent to-background" />
+        {/* Cinematic vignette — lifts type contrast without dulling the image */}
+        <div
+          aria-hidden
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(ellipse at 60% 40%, transparent 40%, oklch(0.04 0.002 60 / 0.55) 100%)",
+          }}
+        />
       </div>
+
 
       {/* Opening lines */}
       <div className="relative z-10 mx-auto flex max-w-5xl flex-col items-start px-6 md:px-10">

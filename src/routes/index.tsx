@@ -136,11 +136,12 @@ function Hero() {
             >
               <Link
                 to="/reflect"
-                className="group inline-flex items-center gap-4 border-b border-foreground/40 pb-2 text-sm tracking-[0.2em] uppercase text-foreground transition hover:border-accent hover:text-accent"
+                className="group inline-flex items-center gap-4 rounded-full border border-foreground/25 px-7 py-3.5 text-sm uppercase tracking-[0.25em] text-foreground/95 backdrop-blur-[2px] transition hover:border-accent hover:text-accent hover:shadow-[0_0_40px_-8px_oklch(0.78_0.08_80/0.4)]"
               >
                 Begin Reflection
                 <span className="inline-block transition-transform group-hover:translate-x-1">→</span>
               </Link>
+
             </div>
           </div>
         )}

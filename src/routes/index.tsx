@@ -486,7 +486,15 @@ function MarqueeColumn({
 function FinalCTA() {
   return (
     <section className="relative overflow-hidden bg-background py-48 md:py-64">
-      <div className="mx-auto max-w-5xl px-6 text-center md:px-10">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-0"
+        style={{
+          background:
+            "radial-gradient(ellipse at 50% 45%, oklch(0.78 0.08 80 / 0.10) 0%, transparent 60%)",
+        }}
+      />
+      <div className="relative mx-auto max-w-5xl px-6 text-center md:px-10">
         <Reveal>
           <h2 className="font-display text-[clamp(2.5rem,7vw,6rem)] leading-[0.95] text-balance">
             You are more than<br />
@@ -502,7 +510,7 @@ function FinalCTA() {
           <div className="mt-16">
             <Link
               to="/reflect"
-              className="group inline-flex items-center gap-4 border-b border-foreground/50 pb-2 text-sm uppercase tracking-[0.3em] text-foreground transition hover:border-accent hover:text-accent"
+              className="group inline-flex items-center gap-4 rounded-full border border-foreground/40 px-8 py-3.5 text-sm uppercase tracking-[0.3em] text-foreground transition hover:border-accent hover:text-accent hover:shadow-[0_0_50px_-8px_oklch(0.78_0.08_80/0.45)]"
             >
               Begin your reflection
               <span className="inline-block transition-transform group-hover:translate-x-1">→</span>
@@ -513,6 +521,7 @@ function FinalCTA() {
     </section>
   );
 }
+
 
 function Footer() {
   return (

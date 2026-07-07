@@ -331,7 +331,7 @@ function ParallaxImage({
   body: string;
 }) {
   return (
-    <div className="relative min-h-[68vh] w-full overflow-hidden bg-surface md:min-h-[76vh]">
+    <div className="relative min-h-[68vh] w-full overflow-hidden rounded-sm bg-surface ring-1 ring-inset ring-foreground/5 md:min-h-[76vh]">
       <img
         src={src}
         alt=""
@@ -339,17 +339,20 @@ function ParallaxImage({
         className="absolute inset-0 h-full w-full scale-[1.04] object-cover"
       />
       <div className="absolute inset-0 bg-gradient-to-r from-background/85 via-background/35 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-b from-background/25 via-transparent to-background/55" />
+      <div className="absolute inset-0 bg-gradient-to-b from-background/25 via-transparent to-background/60" />
       <div className="absolute inset-x-0 bottom-0 p-8 md:p-14">
-        <p className="text-[10px] uppercase tracking-[0.4em] text-accent/75">
-          {String(index + 1).padStart(2, "0")}
-        </p>
-        <h3 className="font-display mt-6 max-w-2xl text-balance text-[clamp(2rem,4vw,4rem)] leading-[1.04]">
-          {title}
-        </h3>
-        <p className="mt-6 max-w-lg text-base leading-relaxed text-foreground/75">{body}</p>
+        <div className="inline-block max-w-2xl rounded-sm bg-background/25 p-6 backdrop-blur-[3px] md:p-8">
+          <p className="text-[10px] uppercase tracking-[0.4em] text-accent/80">
+            {String(index + 1).padStart(2, "0")}
+          </p>
+          <h3 className="font-display mt-5 max-w-2xl text-balance text-[clamp(2rem,4vw,4rem)] leading-[1.04]">
+            {title}
+          </h3>
+          <p className="mt-5 max-w-lg text-base leading-relaxed text-foreground/80">{body}</p>
+        </div>
       </div>
     </div>
+
   );
 }
 

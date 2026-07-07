@@ -208,18 +208,23 @@ function Statistics() {
           </h2>
         </Reveal>
 
-        <div className="mt-24 grid grid-cols-1 gap-16 md:grid-cols-3 md:gap-10">
+        <div className="mt-24 grid grid-cols-1 gap-16 md:grid-cols-3 md:gap-0">
           {stats.map((s, i) => (
             <Reveal key={i} delay={i * 0.12}>
-              <div className="border-t border-border pt-8">
+              <div
+                className={`border-t border-border pt-8 md:px-10 ${
+                  i > 0 ? "md:border-l md:border-t-0 md:pt-0" : ""
+                }`}
+              >
                 <AnimatedNumber value={s.n} suffix={s.suffix} />
-                <p className="mt-6 max-w-xs text-sm leading-relaxed text-muted-foreground">
+                <p className="mt-8 max-w-xs text-sm leading-relaxed text-muted-foreground">
                   {s.label}
                 </p>
               </div>
             </Reveal>
           ))}
         </div>
+
       </div>
     </section>
   );

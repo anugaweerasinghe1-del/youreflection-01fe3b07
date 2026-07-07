@@ -267,12 +267,13 @@ function AnimatedNumber({ value, suffix }: { value: number; suffix?: string }) {
   return (
     <span
       ref={ref}
-      className="font-display block text-[clamp(4rem,8vw,7rem)] leading-none text-foreground"
+      className="font-display block text-[clamp(4rem,8vw,7rem)] leading-none text-foreground tabular-nums"
     >
       {display}
-      <span className="text-accent">{suffix}</span>
+      <span className="font-light text-accent">{suffix}</span>
     </span>
   );
+
 }
 
 /* ---------- Section 4: Journey (horizontal-feeling storytelling) ---------- */
